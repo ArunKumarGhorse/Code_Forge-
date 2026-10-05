@@ -2,12 +2,17 @@ asgiref==3.11.1
 bandit==1.8.6
 Django==4.2.30
 djangorestframework==3.16.1
+joblib==1.5.3
 markdown-it-py==3.0.0
 mdurl==0.1.2
+numpy==2.0.2
 Pygments==2.21.0
 PyYAML==6.0.3
 rich==15.0.0
 ruff==0.16.9
+scikit-learn==1.5.2
+scipy==1.13.1
 sqlparse==0.5.5
 stevedore==5.5.0
+threadpoolctl==3.7.0
 typing_extensions==4.16.0
