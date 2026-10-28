@@ -91,12 +91,9 @@ def analysis_issues(request, pk):
 
 @api_view(["POST"])
 def auth_login(request):
+    import re
     identifier = request.data.get("username", "").strip() or request.data.get("email", "").strip()
     password = request.data.get("password", "")
-    if not identifier:
-        return Response({"error": "Please provide your username or email."}, status=400)
-    if not password:
-        return Response({"error": "Please provide your password."}, status=400)
 
     # Demo guest login bypass for quick evaluation
     if identifier.lower() in ("demo@codeforge.ai", "demo", "alex.vance@codeforge.ai", "guest"):
@@ -112,6 +109,19 @@ def auth_login(request):
                 "tier": "Enterprise Pro",
             }
         }, status=200)
+
+    if not identifier:
+        return Response({"error": "Please enter your email ID."}, status=400)
+
+    email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    if not re.match(email_regex, identifier):
+        return Response({"error": "Please enter a valid email ID (e.g. name@example.com)."}, status=400)
+
+    if not password:
+        return Response({"error": "Please enter your password."}, status=400)
+
+    if len(password) <= 8:
+        return Response({"error": "Password must be more than 8 characters."}, status=400)
 
     user = User.objects.filter(email__iexact=identifier).first()
     if not user:
@@ -130,20 +140,29 @@ def auth_login(request):
             }
         }, status=200)
 
-    return Response({"error": "Invalid username or password. Check your credentials or try Demo Mode."}, status=401)
+    return Response({"error": "Invalid email ID or password. Check your credentials or try Demo Mode."}, status=401)
 
 
 @api_view(["POST"])
 def auth_register(request):
+    import re
     email = request.data.get("email", "").strip()
     username = request.data.get("username", "").strip()
     password = request.data.get("password", "")
     name = request.data.get("name", "").strip()
 
     if not email:
-        return Response({"error": "Email address is required."}, status=400)
-    if not password or len(password) < 6:
-        return Response({"error": "Password must be at least 6 characters."}, status=400)
+        return Response({"error": "Email ID is required."}, status=400)
+
+    email_regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    if not re.match(email_regex, email):
+        return Response({"error": "Please enter a valid email ID (e.g. name@example.com)."}, status=400)
+
+    if not password:
+        return Response({"error": "Password is required."}, status=400)
+
+    if len(password) <= 8:
+        return Response({"error": "Password must be more than 8 characters."}, status=400)
 
     if not username:
         username = email.split("@")[0]

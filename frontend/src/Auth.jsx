@@ -44,13 +44,37 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
   const handleSubmit = async e => {
     e.preventDefault()
     setError('')
+
+    const trimmedEmail = email.trim()
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+    // 1. Email ID validation
+    if (!trimmedEmail) {
+      setError('Please enter your email ID.')
+      return
+    }
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid email ID (e.g. name@example.com).')
+      return
+    }
+
+    // 2. Password validation (> 8 characters)
+    if (!password) {
+      setError('Please enter your password.')
+      return
+    }
+    if (password.length <= 8) {
+      setError('Password must be more than 8 characters.')
+      return
+    }
+
     setLoading(true)
 
     const endpoint = mode === 'login' ? '/api/auth/login/' : '/api/auth/register/'
     const payload =
       mode === 'login'
-        ? { username: email, password }
-        : { email, username: username || email.split('@')[0], name, password }
+        ? { username: trimmedEmail, email: trimmedEmail, password }
+        : { email: trimmedEmail, username: username || trimmedEmail.split('@')[0], name, password }
 
     try {
       const res = await fetch(endpoint, {
@@ -83,7 +107,7 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
       const res = await fetch('/api/auth/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'demo@codeforge.ai', password: 'password' })
+        body: JSON.stringify({ username: 'demo@codeforge.ai', password: 'DemoSecOpsPassword2026!' })
       })
       const data = await res.json()
       if (res.ok) {
@@ -263,7 +287,8 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
 
           <div className="form-field">
             <label className="form-label">
-              {mode === 'login' ? 'Username or Email' : 'Work Email Address'}
+              <span>Email ID</span>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>name@company.com</span>
             </label>
             <div style={{ position: 'relative' }}>
               <Mail
@@ -271,10 +296,10 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
                 style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
               />
               <input
-                type={mode === 'login' ? 'text' : 'email'}
+                type="email"
                 required
                 style={{ paddingLeft: 38 }}
-                placeholder={mode === 'login' ? 'engineer@codeforge.ai or username' : 'alex@company.com'}
+                placeholder="name@company.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
               />
@@ -284,17 +309,12 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
           <div className="form-field">
             <div className="form-label">
               <span>Password</span>
-              {mode === 'login' && (
-                <a
-                  href="#forgot"
-                  onClick={e => {
-                    e.preventDefault()
-                    alert('Password recovery link has been simulated. You can also use One-Click Demo Mode.')
-                  }}
-                  style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 500 }}
-                >
-                  Forgot?
-                </a>
+              {mode === 'login' ? (
+                <span style={{ fontSize: 11, color: password && password.length <= 8 ? 'var(--crit)' : 'var(--text-dim)', fontWeight: 500 }}>
+                  Must be &gt; 8 chars {password ? `(${password.length})` : ''}
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Min 9 chars</span>
               )}
             </div>
             <div className="password-input-wrap">
@@ -306,7 +326,7 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
                 type={showPassword ? 'text' : 'password'}
                 required
                 style={{ paddingLeft: 38, paddingRight: 40 }}
-                placeholder={mode === 'login' ? 'Enter your password' : 'Create a secure password'}
+                placeholder={mode === 'login' ? 'Enter password (> 8 characters)' : 'Create password (> 8 characters)'}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
               />
@@ -319,6 +339,33 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+
+            {/* In Login mode: show live validation helper */}
+            {mode === 'login' && password && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  marginTop: 4,
+                  color: password.length > 8 ? 'var(--ok)' : 'var(--crit)',
+                  fontWeight: 500
+                }}
+              >
+                {password.length > 8 ? (
+                  <>
+                    <Check size={13} />
+                    <span>Password meets length requirement ({password.length} characters)</span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle size={13} />
+                    <span>Password must be more than 8 characters ({password.length}/9 minimum)</span>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Password strength indicator for signup */}
             {mode === 'signup' && password && (
