@@ -16,9 +16,11 @@ class Issue(models.Model):
     confidence = models.FloatField()
     line = models.IntegerField()
     rule = models.CharField(max_length=40)
-    source = models.CharField(max_length=40)  # Ruff / Bandit
+    source = models.CharField(max_length=40)  # Ruff / Bandit / ML
     what = models.TextField(blank=True)
     why = models.TextField(blank=True)
     how = models.TextField(blank=True)
     fix_diff = models.TextField(blank=True)
     validation = models.CharField(max_length=12, blank=True)
+    fixed_code = models.TextField(blank=True, default="")
+    status = models.CharField(max_length=12, blank=True, default="")  # applied / rejected / ignored

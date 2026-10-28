@@ -5,7 +5,7 @@ export const ORDER = ['critical', 'high', 'medium', 'low']
 export const FILE = {
   name: 'app/login.py',
   code: `import sqlite3, hashlib, subprocess
-SECRET_KEY = "sk_live_51H8xExampleKey"
+SECRET_KEY = "mock_secops_demo_secret_token_key"
 
 def login(username, password):
     conn = sqlite3.connect("app.db")

@@ -13,6 +13,8 @@ export default function Results({ theme, analysisId }) {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState({})
   const [error, setError] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [genError, setGenError] = useState('')
   const ed = useRef(null)
   const deco = useRef(null)
 
@@ -20,9 +22,64 @@ export default function Results({ theme, analysisId }) {
     if (!analysisId) return
     fetch(`/api/analyses/${analysisId}/issues/`)
       .then(r => { if (!r.ok) throw new Error(); return r.json() })
-      .then(d => { setData(d); setSel(d.issues[0] || null) })
+      .then(d => {
+        setData(d)
+        setSel(d.issues[0] || null)
+        const initStatus = {}
+        d.issues.forEach(i => { if (i.status) initStatus[i.id] = i.status })
+        setStatus(initStatus)
+      })
       .catch(() => setError('Could not load results. Is the Django server running?'))
   }, [analysisId])
+
+  const generateFix = async () => {
+    if (!sel || generating) return
+    setGenerating(true)
+    setGenError('')
+    try {
+      const res = await fetch(`/api/issues/${sel.id}/generate-fix/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const updated = await res.json()
+      if (!res.ok) {
+        throw new Error(updated.error || 'Failed to generate fix.')
+      }
+      setData(d => ({
+        ...d,
+        issues: d.issues.map(i => i.id === updated.id ? updated : i),
+      }))
+      setSel(updated)
+    } catch (err) {
+      setGenError(err.message || 'Error generating fix.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const mark = async v => {
+    if (!sel) return
+    try {
+      const res = await fetch(`/api/issues/${sel.id}/status/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: v }),
+      })
+      const updated = await res.json()
+      if (!res.ok) {
+        throw new Error(updated.error || 'Failed to update status.')
+      }
+      setStatus(s => ({ ...s, [sel.id]: v }))
+      setData(d => ({
+        ...d,
+        code: (v === 'applied' && updated.fixed_code) ? updated.fixed_code : d.code,
+        issues: d.issues.map(i => i.id === updated.id ? { ...i, status: v } : i),
+      }))
+      setSel(s => ({ ...s, status: v }))
+    } catch (err) {
+      alert(err.message || 'Could not update status')
+    }
+  }
 
   const list = useMemo(() => (data?.issues || []).filter(i =>
     (sev === 'all' || i.severity === sev) && (i.title + i.rule).toLowerCase().includes(q.toLowerCase())), [data, sev, q])
@@ -49,7 +106,6 @@ export default function Results({ theme, analysisId }) {
   if (!data) return <Loader2 className="spin" />
 
   const st = sel && status[sel.id]
-  const mark = v => setStatus(s => ({ ...s, [sel.id]: v }))
   const v = sel && VAL[sel.validation]
 
   return (
@@ -82,7 +138,7 @@ export default function Results({ theme, analysisId }) {
         <div className="right">
           <div className="editor">
             <Editor language="python" value={data.code} theme={theme === 'dark' ? 'vs-dark' : 'light'} onMount={onMount}
-              options={{ readOnly: true, minimap: { enabled: false }, fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', scrollBeyondLastLine: false }} />
+              options={{ readOnly: false, minimap: { enabled: false }, fontSize: 13, fontFamily: 'IBM Plex Mono, monospace', scrollBeyondLastLine: false, wordWrap: 'on' }} />
           </div>
           <div className="card detail">
             {!sel ? <p className="sub">No issues found in this code.</p> : (
@@ -109,11 +165,21 @@ export default function Results({ theme, analysisId }) {
                   </div>
                 )}
                 <div className="actions">
-                  <button className="btn" disabled title="Available after the AI step"><Wand2 size={16} />Generate fix</button>
-                  <button className="btn pri" disabled={sel.validation !== 'validated' || !!st} onClick={() => mark('applied')}><Check size={16} />Apply fix</button>
-                  <button className="btn" disabled={!sel.fix_diff || !!st} onClick={() => mark('rejected')}><X size={16} />Reject</button>
-                  <button className="btn" disabled={!!st} onClick={() => mark('ignored')}><EyeOff size={16} />Ignore</button>
+                  <button className="btn" disabled={generating || !!st} onClick={generateFix} title="Generate an AI explanation and validated fix">
+                    {generating ? <Loader2 size={16} className="spin" /> : <Wand2 size={16} />}
+                    {generating ? 'Generating...' : 'Generate fix'}
+                  </button>
+                  <button className="btn pri" disabled={sel.validation !== 'validated' || !!st || generating} onClick={() => mark('applied')}>
+                    <Check size={16} />Apply fix
+                  </button>
+                  <button className="btn" disabled={!sel.fix_diff || !!st || generating} onClick={() => mark('rejected')}>
+                    <X size={16} />Reject
+                  </button>
+                  <button className="btn" disabled={!!st || generating} onClick={() => mark('ignored')}>
+                    <EyeOff size={16} />Ignore
+                  </button>
                 </div>
+                {genError && <p className="err" style={{ marginTop: 8 }}>{genError}</p>}
               </>
             )}
           </div>
