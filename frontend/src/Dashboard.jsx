@@ -20,8 +20,12 @@ import {
   ExternalLink,
   Trash2,
   Download,
-  Terminal,
-  ShieldCheck
+  ShieldCheck,
+  Users,
+  Key,
+  Clock,
+  UserCheck,
+  History as HistoryIcon
 } from 'lucide-react'
 import { ORDER, SEV } from './data'
 
@@ -34,13 +38,36 @@ export default function Dashboard({ onNew, onSelect, onGoToHistory }) {
   const [error, setError] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
+  // Sub-tabs for bottom section: scans, registered users, login history
+  const [bottomTab, setBottomTab] = useState('scans') // 'scans' | 'users' | 'logins'
+  const [usersList, setUsersList] = useState([])
+  const [loginRecords, setLoginRecords] = useState([])
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('cf_token')
+    return token ? { 'Authorization': `Bearer ${token}` } : {}
+  }
+
   const loadData = async (isManual = false) => {
     if (isManual) setRefreshing(true)
+    const headers = getAuthHeaders()
     try {
-      const r = await fetch('/api/dashboard/')
-      if (!r.ok) throw new Error('Failed to load dashboard data.')
-      const d = await r.json()
+      const [dashRes, usersRes, recordsRes] = await Promise.all([
+        fetch('/api/dashboard/', { headers }),
+        fetch('/api/auth/users/', { headers }).catch(() => null),
+        fetch('/api/auth/records/', { headers }).catch(() => null),
+      ])
+
+      if (!dashRes.ok) throw new Error('Failed to load dashboard data.')
+      const d = await dashRes.json()
       setData(d)
+
+      if (usersRes && usersRes.ok) {
+        setUsersList(await usersRes.json())
+      }
+      if (recordsRes && recordsRes.ok) {
+        setLoginRecords(await recordsRes.json())
+      }
       setError('')
     } catch (err) {
       setError(err.message || 'Could not connect to backend.')
@@ -393,89 +420,275 @@ export default function Dashboard({ onNew, onSelect, onGoToHistory }) {
         </div>
       </div>
 
-      {/* Recent Analyses & Scans Table */}
+      {/* Multi-Tab Bottom Console: Recent Audits | Registered Users | Login Records */}
       <div className="card">
-        <div className="card-header">
-          <div>
-            <h2>Recent Security Audits</h2>
-            <p className="sub" style={{ fontSize: 12.5, margin: '2px 0 0' }}>
-              Latest evaluated files and vulnerability status
-            </p>
+        {/* Navigation Tabs Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className={'btn sm ' + (bottomTab === 'scans' ? 'pri' : 'ghost')}
+              onClick={() => setBottomTab('scans')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <FileCode2 size={14} />
+              <span>My Security Scans</span>
+              <span className="badge" style={{ '--c': bottomTab === 'scans' ? 'rgba(255,255,255,0.25)' : 'var(--accent)', fontSize: 10, padding: '1px 6px' }}>
+                {totalScans}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={'btn sm ' + (bottomTab === 'users' ? 'pri' : 'ghost')}
+              onClick={() => setBottomTab('users')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Users size={14} />
+              <span>Registered Users Table</span>
+              <span className="badge" style={{ '--c': bottomTab === 'users' ? 'rgba(255,255,255,0.25)' : 'var(--cyan)', fontSize: 10, padding: '1px 6px' }}>
+                {usersList.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={'btn sm ' + (bottomTab === 'logins' ? 'pri' : 'ghost')}
+              onClick={() => setBottomTab('logins')}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              <Key size={14} />
+              <span>Login & Registration Log</span>
+              <span className="badge" style={{ '--c': bottomTab === 'logins' ? 'rgba(255,255,255,0.25)' : 'var(--ok)', fontSize: 10, padding: '1px 6px' }}>
+                {loginRecords.length}
+              </span>
+            </button>
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn sm ghost" onClick={onGoToHistory}>
-              View All History ({totalScans})
-              <ArrowUpRight size={14} />
-            </button>
+            {bottomTab === 'scans' && (
+              <button className="btn sm ghost" onClick={onGoToHistory}>
+                View All History ({totalScans})
+                <ArrowUpRight size={14} />
+              </button>
+            )}
           </div>
         </div>
 
-        {recent.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 10px' }}>
-            <FileCode2 size={36} color="var(--text-dim)" style={{ margin: '0 auto 10px' }} />
-            <p className="sub">No analyses recorded in the system yet.</p>
-            <button className="btn pri sm" onClick={onNew} style={{ marginTop: 10 }}>
-              Run First Analysis
-            </button>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Target File</th>
-                  <th>Source</th>
-                  <th>Runtime</th>
-                  <th>Findings</th>
-                  <th>Status</th>
-                  <th>Timestamp</th>
-                  <th style={{ textAlign: 'right' }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recent.map(r => (
-                  <tr
-                    key={r.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onSelect && onSelect(r.id)}
-                  >
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <FileCode2 size={16} color="var(--accent)" />
-                        <span className="mono" style={{ fontWeight: 600 }}>{r.project}</span>
-                        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>#{r.id}</span>
-                      </div>
-                    </td>
-                    <td>{r.source}</td>
-                    <td>{r.langs}</td>
-                    <td>
-                      <span style={{ fontWeight: 700, color: r.issues > 0 ? 'var(--text)' : 'var(--ok)' }}>
-                        {r.issues} {r.issues === 1 ? 'issue' : 'issues'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="badge" style={{ '--c': `var(--${STATUS[r.status] || 'info'})` }}>
-                        {(r.status || '').toLowerCase()}
-                      </span>
-                    </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{r.when}</td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn sm"
-                        onClick={e => {
-                          e.stopPropagation()
-                          onSelect && onSelect(r.id)
-                        }}
+        {/* ── TAB 1: Recent Scans ────────────────────────────────────────── */}
+        {bottomTab === 'scans' && (
+          <>
+            {recent.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '40px 10px' }}>
+                <FileCode2 size={36} color="var(--text-dim)" style={{ margin: '0 auto 10px' }} />
+                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>No analyses recorded yet</h3>
+                <p className="sub" style={{ maxWidth: 440, margin: '0 auto 14px', fontSize: 13 }}>
+                  Your account currently has zero scans. Upload a Python file or paste code to launch your first audit and populate your personal dashboard.
+                </p>
+                <button className="btn pri sm" onClick={onNew}>
+                  <Plus size={14} /> Run First Analysis
+                </button>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Target File</th>
+                      <th>Source</th>
+                      <th>Runtime</th>
+                      <th>Findings</th>
+                      <th>Status</th>
+                      <th>Timestamp</th>
+                      <th style={{ textAlign: 'right' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent.map(r => (
+                      <tr
+                        key={r.id}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => onSelect && onSelect(r.id)}
                       >
-                        Inspect
-                        <ArrowUpRight size={13} />
-                      </button>
-                    </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <FileCode2 size={16} color="var(--accent)" />
+                            <span className="mono" style={{ fontWeight: 600 }}>{r.project}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>#{r.id}</span>
+                          </div>
+                        </td>
+                        <td>{r.source}</td>
+                        <td>{r.langs}</td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: r.issues > 0 ? 'var(--text)' : 'var(--ok)' }}>
+                            {r.issues} {r.issues === 1 ? 'issue' : 'issues'}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="badge" style={{ '--c': `var(--${STATUS[r.status] || 'info'})` }}>
+                            {(r.status || '').toLowerCase()}
+                          </span>
+                        </td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{r.when}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            className="btn sm"
+                            onClick={e => {
+                              e.stopPropagation()
+                              onSelect && onSelect(r.id)
+                            }}
+                          >
+                            Inspect
+                            <ArrowUpRight size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── TAB 2: Registered Users Table ──────────────────────────────── */}
+        {bottomTab === 'users' && (
+          <div style={{ overflowX: 'auto' }}>
+            {usersList.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 10px', color: 'var(--text-muted)' }}>
+                <Users size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                <p>No registered accounts found.</p>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>User / Name</th>
+                    <th>Email Address</th>
+                    <th>Role</th>
+                    <th>Account Tier</th>
+                    <th>Registered Date</th>
+                    <th>Last Active</th>
+                    <th style={{ textAlign: 'right' }}>Total Audits</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {usersList.map(u => (
+                    <tr key={u.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                          <div
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: '50%',
+                              background: 'var(--accent-soft)',
+                              color: 'var(--accent)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(u.name || u.username || 'U')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 13 }}>{u.name || u.username}</div>
+                            <div className="mono" style={{ fontSize: 11, color: 'var(--text-dim)' }}>@{u.username}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: 13, color: 'var(--text)' }}>{u.email}</td>
+                      <td>
+                        <span className="badge" style={{ '--c': 'var(--accent)', fontSize: 11 }}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="badge" style={{ '--c': 'var(--cyan)', fontSize: 11 }}>
+                          {u.tier}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.date_joined}</td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.last_login}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: u.total_scans > 0 ? 'var(--ok)' : 'var(--text-dim)' }}>
+                        {u.total_scans} scan{u.total_scans === 1 ? '' : 's'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* ── TAB 3: Login & Registration History Table ──────────────────── */}
+        {bottomTab === 'logins' && (
+          <div style={{ overflowX: 'auto' }}>
+            {loginRecords.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '36px 10px', color: 'var(--text-muted)' }}>
+                <Key size={32} style={{ margin: '0 auto 8px', opacity: 0.5 }} />
+                <p>No login or registration activity logged yet.</p>
+              </div>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account Identifier</th>
+                    <th>Action</th>
+                    <th>Outcome</th>
+                    <th>Timestamp</th>
+                    <th style={{ textAlign: 'right' }}>IP Address</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loginRecords.map(rec => (
+                    <tr key={rec.id}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <Key size={13} color="var(--accent)" />
+                          <span className="mono" style={{ fontSize: 12.5, fontWeight: 600 }}>
+                            {rec.identifier}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            '--c': rec.action === 'REGISTER' ? 'var(--purple)' : 'var(--accent)',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {rec.action}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="badge"
+                          style={{
+                            '--c': rec.status === 'SUCCESS' ? 'var(--ok)' : 'var(--crit)',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {rec.status === 'SUCCESS' ? '✓ Accepted' : '✕ Denied'}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        {rec.timestamp}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)' }}>
+                        {rec.ip_address}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
       </div>

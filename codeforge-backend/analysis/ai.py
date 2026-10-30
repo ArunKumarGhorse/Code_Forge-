@@ -51,11 +51,18 @@ class AIProvider(ABC):
 
 
 class GeminiProvider(AIProvider):
-    # Try gemini-3.5-flash first; fall back to gemini-3.5-flash-lite if needed
-    MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite"]
+    # Valid Gemini models in priority order
+    MODELS = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-pro-latest"]
 
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        if not self.api_key:
+            from pathlib import Path
+            base_dir = Path(__file__).resolve().parent.parent
+            load_dotenv(base_dir / ".env")
+            load_dotenv(base_dir.parent / ".env")
+            self.api_key = os.getenv("GEMINI_API_KEY")
+
         if not self.api_key:
             raise AIError("AI provider is not configured. GEMINI_API_KEY is missing.")
 

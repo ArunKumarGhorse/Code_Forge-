@@ -12,4 +12,11 @@ urlpatterns = [
     path("auth/login/", views.auth_login),
     path("auth/register/", views.auth_register),
     path("auth/me/", views.auth_me),
+    path("auth/users/", views.auth_users),
+    path("auth/records/", views.auth_records),
+    path("compiler/run/", views.compiler_run),
+    path("compiler/complexity/", views.compiler_complexity),
+    path("compiler/languages/", views.compiler_languages),
+    path("compiler/inspect/", views.compiler_inspect),
+    path("chatbot/", views.chatbot),
 ]

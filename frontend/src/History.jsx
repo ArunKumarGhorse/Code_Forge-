@@ -42,11 +42,16 @@ export default function History({ onSelect, onNew }) {
   const [deleting, setDeleting] = useState(false)
   const [toast, setToast] = useState('')
 
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('cf_token')
+    return token ? { 'Authorization': `Bearer ${token}` } : {}
+  }
+
   const fetchHistory = async () => {
     setLoading(true)
     setError('')
     try {
-      const res = await fetch('/api/analyses/')
+      const res = await fetch('/api/analyses/', { headers: getAuthHeaders() })
       if (!res.ok) throw new Error('Failed to load analysis history.')
       const data = await res.json()
       setItems(data)
@@ -107,7 +112,7 @@ export default function History({ onSelect, onNew }) {
   const executeDeleteSingle = async item => {
     setDeleting(true)
     try {
-      const res = await fetch(`/api/analyses/${item.id}/`, { method: 'DELETE' })
+      const res = await fetch(`/api/analyses/${item.id}/`, { method: 'DELETE', headers: getAuthHeaders() })
       if (!res.ok) throw new Error('Failed to delete analysis.')
       setItems(prev => prev.filter(i => i.id !== item.id))
       setSelectedIds(prev => {
@@ -132,7 +137,7 @@ export default function History({ onSelect, onNew }) {
       const idsArray = Array.from(selectedIds)
       const res = await fetch('/api/analyses/clear/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ ids: idsArray })
       })
       if (!res.ok) throw new Error('Bulk delete failed.')
@@ -151,7 +156,11 @@ export default function History({ onSelect, onNew }) {
   const executeClearAll = async () => {
     setDeleting(true)
     try {
-      const res = await fetch('/api/analyses/clear/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      const res = await fetch('/api/analyses/clear/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({})
+      })
       if (!res.ok) throw new Error('Clear all failed.')
       setItems([])
       setSelectedIds(new Set())

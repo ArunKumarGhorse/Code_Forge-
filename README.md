@@ -11,6 +11,12 @@ CodeForge is an intelligent, developer-focused code analyzer and repair tool for
   - **Machine Learning Risk Scoring**: AST-based function scoring using a Scikit-Learn model to predict vulnerability risk in functions.
   - **AI Explanations & Auto-Fixes (Gemini)**: Generates clear, non-jargon explanations of *what* is wrong, *why* it matters, and *how* to fix it.
   - **Honest Automated Validation**: Fixes are re-scanned using `compile()`, Ruff, and Bandit. A fix is marked `Validated` **only** if the syntax check passes, the target rule count drops, and no new issues appear.
+- **Competitive Programming Compiler & Testing Arena**:
+  - **Multi-Language Support**: Run Python 3, C++ (C++17), C (C11), JavaScript (Node.js), and Java.
+  - **Custom Test Cases & Judge**: Add, edit, or remove multiple test cases with stdin and optional expected output. Compares actual vs expected outputs, highlights diffs, and computes verdicts (`Accepted`, `Wrong Answer`, `Time Limit Exceeded`, `Runtime Error`, `Compilation Error`).
+  - **Empirical Execution Metrics**: Measures real wall-clock execution time (ms) and peak memory consumption (MB).
+  - **Asymptotic Time & Space Complexity Engine**: Analyzes Big-O Time Complexity ($O(1)$, $O(\log N)$, $O(N)$, $O(N \log N)$, $O(N^2)$, $O(2^N)$) and Space Complexity ($O(1)$, $O(N)$, $O(N^2)$), provides best/worst-case breakdowns, and checks competitive programming feasibility (e.g. $N \le 10^5$ constraints under 1.0s limit).
+  - **Classic CP Problem Presets**: Built-in templates for Two Sum, Maximum Subarray (Kadane's), and Valid Parentheses.
 - **Developer Experience**:
   - Interactive Monaco Code Editor with error markers and line-highlighting.
   - Interactive unified diff viewer (`+` additions, `-` deletions).
@@ -30,9 +36,10 @@ CodeForge
 │   │   ├── fixes.py      # AST context extraction, splicing, diff generation & honest validation
 │   │   ├── ml.py         # AST function extraction & Scikit-Learn risk inference
 │   │   ├── runner.py     # Background thread runner for Ruff, Bandit & ML pipeline
+│   │   ├── compiler.py   # Multi-language compiler, testcases judge & complexity engine
 │   │   ├── models.py     # Analysis and Issue models (with status, fixed_code, validation)
 │   │   ├── serializers.py# DRF ModelSerializers
-│   │   ├── views.py      # REST API endpoints (analyses, issues, generate-fix, status, dashboard)
+│   │   ├── views.py      # REST API endpoints (analyses, issues, generate-fix, compiler, dashboard)
 │   │   ├── urls.py       # API routing under /api/
 │   │   └── tests.py      # Comprehensive automated unit test suite
 │   ├── config/           # Django settings, URLs, WSGI/ASGI
@@ -40,6 +47,7 @@ CodeForge
 └── frontend (Vite, React 18)
     ├── src/
     │   ├── App.jsx       # Theme provider and main layout
+    │   ├── Compiler.jsx  # Multi-language CP compiler, testcases runner & complexity UI
     │   ├── Dashboard.jsx # Real metrics (severity breakdown, tool vs ML counts, recent runs)
     │   ├── NewAnalysis.jsx# .py file upload & paste code interfaces
     │   ├── Results.jsx   # Split view: Monaco Editor + Issue list + Diff & Fix actions

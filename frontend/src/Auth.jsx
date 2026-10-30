@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ShieldCheck,
@@ -13,68 +13,127 @@ import {
   AlertCircle,
   Hammer,
   Github,
-  Globe
+  Globe,
+  CheckCircle2,
+  Circle,
+  XCircle
 } from 'lucide-react'
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,30}$/
 
 export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding }) {
   const [mode, setMode] = useState(initialMode) // 'login' | 'signup'
+
+  // Form values
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
 
-  // Calculate password strength
-  const getPasswordStrength = pwd => {
-    if (!pwd) return 0
-    let score = 0
-    if (pwd.length >= 8) score += 1
-    if (/[A-Z]/.test(pwd)) score += 1
-    if (/[0-9]/.test(pwd)) score += 1
-    if (/[^A-Za-z0-9]/.test(pwd)) score += 1
-    return score
+  // UI state
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [serverError, setServerError] = useState('')
+
+  // Field touched state for inline validation feedback
+  const [touched, setTouched] = useState({
+    email: false,
+    username: false,
+    name: false,
+    password: false,
+    confirmPassword: false
+  })
+
+  // Synchronize with prop changes
+  useEffect(() => {
+    setMode(initialMode)
+    setServerError('')
+    setTouched({ email: false, username: false, name: false, password: false, confirmPassword: false })
+  }, [initialMode])
+
+  const markTouched = field => {
+    setTouched(prev => ({ ...prev, [field]: true }))
   }
 
-  const pwdScore = getPasswordStrength(password)
-  const strengthLabels = ['Weak', 'Fair', 'Good', 'Strong']
+  // ── Validation Rules ─────────────────────────────────────────────────────
+  const errors = {}
+
+  // Email validation
+  if (!email.trim()) {
+    errors.email = 'Email address is required.'
+  } else if (!EMAIL_REGEX.test(email.trim())) {
+    errors.email = 'Please enter a valid email address (e.g. name@company.com).'
+  }
+
+  // Password validation (> 8 characters, i.e., min 9)
+  if (!password) {
+    errors.password = 'Password is required.'
+  } else if (password.length <= 8) {
+    errors.password = `Password must be more than 8 characters (${password.length}/9 minimum).`
+  }
+
+  // Signup-specific validations
+  if (mode === 'signup') {
+    if (!name.trim()) {
+      errors.name = 'Full name is required.'
+    } else if (name.trim().length < 2) {
+      errors.name = 'Full name must be at least 2 characters.'
+    }
+
+    if (!username.trim()) {
+      errors.username = 'Username is required.'
+    } else if (!USERNAME_REGEX.test(username.trim())) {
+      errors.username = 'Username must be 3-30 characters (letters, numbers, underscores only).'
+    }
+
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password.'
+    } else if (confirmPassword !== password) {
+      errors.confirmPassword = 'Passwords do not match.'
+    }
+  }
+
+  const isValid = Object.keys(errors).length === 0
+
+  // ── Password Strength Rules (Signup) ────────────────────────────────────
+  const pwdChecks = {
+    length: password.length >= 9,
+    upper: /[A-Z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password)
+  }
+
+  const pwdScore = Object.values(pwdChecks).filter(Boolean).length
+  const strengthLabels = ['Too Weak', 'Fair', 'Good', 'Strong']
   const strengthColors = ['var(--crit)', 'var(--high)', 'var(--med)', 'var(--ok)']
 
+  // ── Form Submission ──────────────────────────────────────────────────────
   const handleSubmit = async e => {
     e.preventDefault()
-    setError('')
+    setServerError('')
 
-    const trimmedEmail = email.trim()
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    // Mark all relevant fields as touched
+    setTouched({
+      email: true,
+      username: true,
+      name: true,
+      password: true,
+      confirmPassword: true
+    })
 
-    // 1. Email ID validation
-    if (!trimmedEmail) {
-      setError('Please enter your email ID.')
-      return
-    }
-    if (!emailRegex.test(trimmedEmail)) {
-      setError('Please enter a valid email ID (e.g. name@example.com).')
-      return
-    }
-
-    // 2. Password validation (> 8 characters)
-    if (!password) {
-      setError('Please enter your password.')
-      return
-    }
-    if (password.length <= 8) {
-      setError('Password must be more than 8 characters.')
-      return
-    }
+    if (!isValid) return
 
     setLoading(true)
 
+    const trimmedEmail = email.trim()
     const endpoint = mode === 'login' ? '/api/auth/login/' : '/api/auth/register/'
     const payload =
       mode === 'login'
         ? { username: trimmedEmail, email: trimmedEmail, password }
-        : { email: trimmedEmail, username: username || trimmedEmail.split('@')[0], name, password }
+        : { email: trimmedEmail, username: username.trim() || trimmedEmail.split('@')[0], name: name.trim(), password }
 
     try {
       const res = await fetch(endpoint, {
@@ -93,16 +152,16 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
       localStorage.setItem('cf_user', JSON.stringify(data.user))
       onSuccess && onSuccess(data.user)
     } catch (err) {
-      setError(err.message || 'Authentication error. Please try again.')
+      setServerError(err.message || 'Authentication error. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  // Quick Demo Access Login
+  // ── 1-Click Demo Login ───────────────────────────────────────────────────
   const handleDemoLogin = async () => {
     setLoading(true)
-    setError('')
+    setServerError('')
     try {
       const res = await fetch('/api/auth/login/', {
         method: 'POST',
@@ -115,7 +174,6 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
         localStorage.setItem('cf_user', JSON.stringify(data.user))
         onSuccess && onSuccess(data.user)
       } else {
-        // Fallback local demo profile
         const demoUser = {
           id: 999,
           username: 'alex_vance',
@@ -143,6 +201,15 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
     } finally {
       setLoading(false)
     }
+  }
+
+  // Helper for input border styles
+  const getInputStyle = field => {
+    if (!touched[field]) return {}
+    if (errors[field]) {
+      return { borderColor: 'var(--crit)', boxShadow: '0 0 0 2px var(--crit-soft)' }
+    }
+    return { borderColor: 'var(--ok)' }
   }
 
   return (
@@ -191,7 +258,8 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
             className={'auth-tab-btn' + (mode === 'login' ? ' active' : '')}
             onClick={() => {
               setMode('login')
-              setError('')
+              setServerError('')
+              setTouched({ email: false, username: false, name: false, password: false, confirmPassword: false })
             }}
           >
             Sign In
@@ -201,16 +269,17 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
             className={'auth-tab-btn' + (mode === 'signup' ? ' active' : '')}
             onClick={() => {
               setMode('signup')
-              setError('')
+              setServerError('')
+              setTouched({ email: false, username: false, name: false, password: false, confirmPassword: false })
             }}
           >
             Create Account
           </button>
         </div>
 
-        {/* Error Alert */}
+        {/* Server Error Alert */}
         <AnimatePresence>
-          {error && (
+          {serverError && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -229,17 +298,25 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
               }}
             >
               <AlertCircle size={16} flexShrink={0} />
-              <span>{error}</span>
+              <span>{serverError}</span>
             </motion.div>
           )}
         </AnimatePresence>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="auth-form">
+        <form onSubmit={handleSubmit} className="auth-form" noValidate>
           {mode === 'signup' && (
             <>
+              {/* Full Name */}
               <div className="form-field">
-                <label className="form-label">Full Name</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label">Full Name</label>
+                  {touched.name && !errors.name && (
+                    <span style={{ fontSize: 11, color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <Check size={12} /> Valid
+                    </span>
+                  )}
+                </div>
                 <div style={{ position: 'relative' }}>
                   <User
                     size={16}
@@ -247,17 +324,33 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
                   />
                   <input
                     type="text"
-                    required
-                    style={{ paddingLeft: 38 }}
+                    style={{ paddingLeft: 38, ...getInputStyle('name') }}
                     placeholder="Alex Vance"
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    onChange={e => {
+                      setName(e.target.value)
+                      setServerError('')
+                    }}
+                    onBlur={() => markTouched('name')}
                   />
                 </div>
+                {touched.name && errors.name && (
+                  <span style={{ fontSize: 11.5, color: 'var(--crit)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <AlertCircle size={12} /> {errors.name}
+                  </span>
+                )}
               </div>
 
+              {/* Username */}
               <div className="form-field">
-                <label className="form-label">Username</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label">Username</label>
+                  {touched.username && !errors.username && (
+                    <span style={{ fontSize: 11, color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <Check size={12} /> Available
+                    </span>
+                  )}
+                </div>
                 <div style={{ position: 'relative' }}>
                   <span
                     style={{
@@ -274,22 +367,37 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
                   </span>
                   <input
                     type="text"
-                    required
-                    style={{ paddingLeft: 34 }}
+                    style={{ paddingLeft: 34, ...getInputStyle('username') }}
                     placeholder="alex_vance"
                     value={username}
-                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    onChange={e => {
+                      setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+                      setServerError('')
+                    }}
+                    onBlur={() => markTouched('username')}
                   />
                 </div>
+                {touched.username && errors.username && (
+                  <span style={{ fontSize: 11.5, color: 'var(--crit)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <AlertCircle size={12} /> {errors.username}
+                  </span>
+                )}
               </div>
             </>
           )}
 
+          {/* Email ID */}
           <div className="form-field">
-            <label className="form-label">
-              <span>Email ID</span>
-              <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>name@company.com</span>
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label className="form-label">Email Address</label>
+              {touched.email && !errors.email ? (
+                <span style={{ fontSize: 11, color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <Check size={12} /> Valid format
+                </span>
+              ) : (
+                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>name@company.com</span>
+              )}
+            </div>
             <div style={{ position: 'relative' }}>
               <Mail
                 size={16}
@@ -297,25 +405,34 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
               />
               <input
                 type="email"
-                required
-                style={{ paddingLeft: 38 }}
+                style={{ paddingLeft: 38, ...getInputStyle('email') }}
                 placeholder="name@company.com"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                onChange={e => {
+                  setEmail(e.target.value)
+                  setServerError('')
+                }}
+                onBlur={() => markTouched('email')}
               />
             </div>
+            {touched.email && errors.email && (
+              <span style={{ fontSize: 11.5, color: 'var(--crit)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <AlertCircle size={12} /> {errors.email}
+              </span>
+            )}
           </div>
 
+          {/* Password */}
           <div className="form-field">
-            <div className="form-label">
+            <div className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Password</span>
-              {mode === 'login' ? (
-                <span style={{ fontSize: 11, color: password && password.length <= 8 ? 'var(--crit)' : 'var(--text-dim)', fontWeight: 500 }}>
-                  Must be &gt; 8 chars {password ? `(${password.length})` : ''}
-                </span>
-              ) : (
-                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Min 9 chars</span>
-              )}
+              <span style={{
+                fontSize: 11,
+                color: password && password.length <= 8 ? 'var(--crit)' : password.length > 8 ? 'var(--ok)' : 'var(--text-dim)',
+                fontWeight: 500
+              }}>
+                Must be &gt; 8 chars {password ? `(${password.length})` : ''}
+              </span>
             </div>
             <div className="password-input-wrap">
               <Lock
@@ -324,71 +441,119 @@ export default function Auth({ initialMode = 'login', onSuccess, onBackToLanding
               />
               <input
                 type={showPassword ? 'text' : 'password'}
-                required
-                style={{ paddingLeft: 38, paddingRight: 40 }}
+                style={{ paddingLeft: 38, paddingRight: 40, ...getInputStyle('password') }}
                 placeholder={mode === 'login' ? 'Enter password (> 8 characters)' : 'Create password (> 8 characters)'}
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={e => {
+                  setPassword(e.target.value)
+                  setServerError('')
+                }}
+                onBlur={() => markTouched('password')}
               />
               <button
                 type="button"
                 className="password-toggle-btn"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
 
-            {/* In Login mode: show live validation helper */}
-            {mode === 'login' && password && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  fontSize: 11.5,
-                  marginTop: 4,
-                  color: password.length > 8 ? 'var(--ok)' : 'var(--crit)',
-                  fontWeight: 500
-                }}
-              >
-                {password.length > 8 ? (
-                  <>
-                    <Check size={13} />
-                    <span>Password meets length requirement ({password.length} characters)</span>
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle size={13} />
-                    <span>Password must be more than 8 characters ({password.length}/9 minimum)</span>
-                  </>
-                )}
-              </div>
+            {touched.password && errors.password && (
+              <span style={{ fontSize: 11.5, color: 'var(--crit)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <AlertCircle size={12} /> {errors.password}
+              </span>
             )}
 
-            {/* Password strength indicator for signup */}
-            {mode === 'signup' && password && (
-              <div>
-                <div className="pwd-strength-bar">
-                  {[0, 1, 2, 3].map(lvl => (
-                    <div
-                      key={lvl}
-                      className="pwd-meter-segment"
-                      style={{
-                        background: pwdScore > lvl ? strengthColors[pwdScore - 1] : undefined
-                      }}
-                    />
+            {/* Signup: Password checklist & strength meter */}
+            {mode === 'signup' && (
+              <div style={{ marginTop: 8, padding: '10px 12px', background: 'var(--surface2)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                {password && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div className="pwd-strength-bar">
+                      {[0, 1, 2, 3].map(lvl => (
+                        <div
+                          key={lvl}
+                          className="pwd-meter-segment"
+                          style={{
+                            background: pwdScore > lvl ? strengthColors[pwdScore - 1] : undefined
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>
+                      <span>Strength: <b style={{ color: strengthColors[Math.max(0, pwdScore - 1)] }}>{strengthLabels[Math.max(0, pwdScore - 1)]}</b></span>
+                      <span>Score: {pwdScore}/4</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Password Criteria Checklist */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 11 }}>
+                  {[
+                    { label: 'At least 9 characters', met: pwdChecks.length },
+                    { label: 'Uppercase letter (A-Z)', met: pwdChecks.upper },
+                    { label: 'Number (0-9)', met: pwdChecks.number },
+                    { label: 'Special symbol (!@#$)', met: pwdChecks.special }
+                  ].map(c => (
+                    <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: 5, color: c.met ? 'var(--ok)' : 'var(--text-dim)' }}>
+                      {c.met ? <CheckCircle2 size={12} color="var(--ok)" /> : <Circle size={12} />}
+                      <span>{c.label}</span>
+                    </div>
                   ))}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginTop: 4, color: 'var(--text-muted)' }}>
-                  <span>Strength: {strengthLabels[Math.max(0, pwdScore - 1)]}</span>
-                  <span>Min. 8 chars with symbols & numbers</span>
                 </div>
               </div>
             )}
           </div>
 
+          {/* Confirm Password (Signup only) */}
+          {mode === 'signup' && (
+            <div className="form-field">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="form-label">Confirm Password</label>
+                {confirmPassword && confirmPassword === password && (
+                  <span style={{ fontSize: 11, color: 'var(--ok)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <Check size={12} /> Passwords match
+                  </span>
+                )}
+              </div>
+              <div className="password-input-wrap">
+                <Lock
+                  size={16}
+                  style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
+                />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  style={{ paddingLeft: 38, paddingRight: 40, ...getInputStyle('confirmPassword') }}
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={e => {
+                    setConfirmPassword(e.target.value)
+                    setServerError('')
+                  }}
+                  onBlur={() => markTouched('confirmPassword')}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  tabIndex={-1}
+                  aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {touched.confirmPassword && errors.confirmPassword && (
+                <span style={{ fontSize: 11.5, color: 'var(--crit)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <AlertCircle size={12} /> {errors.confirmPassword}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Submit Button */}
           <button
             type="submit"
             className="btn pri"
